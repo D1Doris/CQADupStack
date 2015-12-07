@@ -27,7 +27,7 @@ Please cite the following paper when making use of CQADupStack:
  address = {New York, NY, USA},
 } 
 
-For licensing information please see the LECENCE file that comes with the data.
+For licensing information please see the LICENCE file.
 
 For more information on the structure of the files in the data set, please see the README file that comes with the data.
 The README file you are reading now contains information on the query script (query_cqadupstack.py) only.
