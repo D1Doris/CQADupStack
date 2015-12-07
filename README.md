@@ -1,4 +1,4 @@
-The scripts in this directory can be used to manipulate the CQADupStack data (cqadupstack.tar.gz, or downloadable from http://nlp.cis.unimelb.edu.au/resources/cqadupstack/ as mentioned in the paper, which redirects to here).
+The scripts in this directory can be used to manipulate the CQADupStack data, downloadable from http://nlp.cis.unimelb.edu.au/resources/cqadupstack/.
 
 CQADupStack contains 12 Stackexchange (http://stackexchange.com/) subforums which have been preprocessed as described in the paper mentioned below.
 The StackExchange data dump that forms the basis of this set is the version released on September 26, 2014.
