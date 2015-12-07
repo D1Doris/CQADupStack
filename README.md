@@ -38,7 +38,7 @@ Alternatively, you can make a subforum object directly by calling the class 'Sub
 
 Subforum objects can be queried using the following methods: (examples on how to use them can be found at the end of this file)
 
-## SPLIT METHODS ##
+#### SPLIT METHODS ####
 
 -  split_for_classification(self) <br />
         Takes no input and makes twelve plain text files: a small test set, a large test set, and 10 files for the training set (trainpairs_[01-10].txt, testpairs_small.txt and testpairs_large.txt). <br />
