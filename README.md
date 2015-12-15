@@ -304,7 +304,7 @@ Subforum objects can be queried using the following methods: (examples on how to
 #### EVALUATION METHODS FOR CLASSIFICATION ####
 
 -  evaluate_classification(self, scorefile) <br />
-        Takes a file with scores as input and returns a dictionary with the Precision, Recall, F1-score and Accuracy. <br />
+        Takes a file with scores as input and returns a dictionary with the Precision, Recall, F1-score, Accuracy and Precision and Recall per class. <br />
         The file with scores should have the same format as the classification training and test sets: <br />
         One line per classification with two space separated postids followed by a 1 for duplicates, or 0 for non-duplicates. <br />
    
@@ -315,7 +315,7 @@ Subforum objects can be queried using the following methods: (examples on how to
     Here are some examples of how to use the script:
 
     >\>\>\> import query_cqadupstack as qcqa <br />
-    >\>\>\> o = qcqa.load_subforum('/home/hoogeveen/datasets/stackexchange/webmasters.zip') <br />
+    >\>\>\> o = qcqa.load_subforum('/home/hoogeveen/datasets/CQADupStack/webmasters.zip') <br />
     >\>\>\> testset, develset, indexset = o.split_for_retrieval() <br />
     >\>\>\> len(develset) <br />
     >1862 <br />
