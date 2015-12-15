@@ -1191,7 +1191,7 @@ class Subforum():
     #########################################
 
     def evaluate_classification(self, scorefile):
-	''' Takes a file with scores as input and returns a dictionary with the Precision, Recall, F1-score and Accuracy.
+	''' Takes a file with scores as input and returns a dictionary with the Precision, Recall, F1-score, Accuracy and precision and Recall per class.
 	    The file with scores should have the same format as the classification training and test sets:
 	    One line per classification with two space separated postids followed by a 1 for duplicates, or 0 for non-duplicates. '''
 	truenegatives = 0
@@ -1220,37 +1220,72 @@ class Subforum():
 	recall = self._compute_recall(truenegatives, truepositives, falsenegatives, falsepositives)
 	fscore = self._compute_fscore(recall, precision)
 	accuracy = self._compute_accuracy(truenegatives, truepositives, falsenegatives, falsepositives)
-	return {'precision': precision, 'recall': recall, 'fscore': fscore, 'accuracy': accuracy}
+	prec_pos, prec_neg = self._compute_precision_oneclass(truenegatives, truepositives, falsenegatives, falsepositives)
+        rec_pos, rec_neg = self._compute_recall_oneclass(truenegatives, truepositives, falsenegatives, falsepositives)
+        return {'precision': precision, 'recall': recall, 'fscore': fscore, 'accuracy': accuracy, 'precision_positive_class': prec_pos, 'precision_negative_class': prec_neg, 'recall_positive_class': rec_pos, 'recall_negative_class': rec_neg}
 
     def _compute_precision(self, truenegatives, truepositives, falsenegatives, falsepositives):
-	''' Takes the nr of truenegatives, truepositives, falsenegatives, and falsepositives as input and returns the precision. '''
-	predicted_positives = truepositives + falsepositives
-	if predicted_positives > 0:
-	    return truepositives/predicted_positives
-	return 0
+        ''' Takes the nr of truenegatives, truepositives, falsenegatives, and falsepositives as input and returns the precision. '''
+        predicted_positives = float(truepositives + falsepositives)
+        if predicted_positives > 0.0:
+            return truepositives / predicted_positives
+        return 0.0
 
     def _compute_recall(self, truenegatives, truepositives, falsenegatives, falsepositives):
         ''' Takes the nr of truenegatives, truepositives, falsenegatives, and falsepositives as input and returns the recall. '''
-	return truepositives / (truepositives + falsenegatives)
+        all_positives = float(truepositives + falsenegatives)
+        if all_positives > 0.0:
+            return truepositives / all_positives
+        return 0.0
 
     def _compute_fscore(self, recall, precision):
-	''' Takes the recall and precision as input and returns the F1-score. '''
-	return 2 * ((precision * recall) / (precision + recall))
+        ''' Takes the recall and precision as input and returns the F1-score. '''
+        pr = precision + recall
+        if pr > 0.0:
+            return 2 * ((precision * recall) / pr)
+        return 0.0
 
     def _compute_accuracy(self, truenegatives, truepositives, falsenegatives, falsepositives):
         ''' Takes the nr of truenegatives, truepositives, falsenegatives, and falsepositives as input and returns the accuracy. '''
-        return (truepositives + truenegatives) / (truepositives + falsepositives + truenegatives + falsenegatives)
+        return (truepositives + truenegatives) / float(truepositives + falsepositives + truenegatives + falsenegatives)
 
-    def _compute_precision_oneclass(self, pos, neg):
-	''' Takes the nr of positives for one class (either truepositives or truenegatives) and the nr of negatives for one class (either falsepositives or falsenegatives) as input and returns the precision for that class. '''
-	return 0
-	# TODO: implement this
+    def _compute_precision_oneclass(self, truenegatives, truepositives, falsenegatives, falsepositives):
+        ''' Takes the nr of truenegatives, truepositives, falsenegatives, and falsepositives as input and returns the precision for both the positive and the negative class. '''
+        # For the positive class (this is the same as normal precision):
+        predicted_positives = float(truepositives + falsepositives)
+        if predicted_positives > 0.0:
+            precision_for_positives = truepositives / predicted_positives
+        else:
+            precision_for_positives = 0.0
 
-    def _compute_recall_oneclass(self, pos, neg):
-        ''' Takes the nr of positives for one class (either truepositives or truenegatives) and the nr of negatives for one class (either falsepositives or falsenegatives) as input 
-and returns the recall for that class. '''
-	return 0
-	# TODO: implement this
+        # For the negative class:
+        predicted_negatives = float(truenegatives + falsenegatives)
+        if predicted_negatives > 0.0:
+            precision_for_negatives = truenegatives / predicted_negatives
+        else:
+            precision_for_negatives = 0.0
+
+        return precision_for_positives, precision_for_negatives
+
+
+    def _compute_recall_oneclass(self, truenegatives, truepositives, falsenegatives, falsepositives):
+        ''' Takes the nr of truenegatives, truepositives, falsenegatives, and falsepositives as input and returns the recall for both the positive and the negative class. '''
+        # For the positive class (this is the same as normal precision):
+        all_positives = float(truepositives + falsenegatives)
+        if all_positives > 0.0:
+            recall_for_positives = truepositives / all_positives
+        else:
+            recall_for_positives = 0.0
+
+        # For the negative class:
+        all_negatives = float(truenegatives + falsepositives)
+        if all_negatives > 0.0:
+            recall_for_negatives = truenegatives / all_negatives
+        else: # not likely, but we need to check anyway
+            recall_for_negatives = 0.0
+
+        return recall_for_positives, recall_for_negatives
+
 
 
 
@@ -1279,7 +1314,7 @@ def usage():
     usage_text += '\n\n    -----------------------------'
     usage_text += '\n\n    Here are some examples of how to use the script:'
     usage_text += '''\n\n    >>> import query_cqadupstack as qcqa
-    >>> o = qcqa.load_subforum('/home/hoogeveen/datasets/stackexchange/webmasters.zip')
+    >>> o = qcqa.load_subforum('/home/hoogeveen/datasets/CQADupStack/webmasters.zip')
     >>> testset, develset, indexset = o.split_for_retrieval()
     >>> len(develset)
     1862
