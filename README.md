@@ -85,6 +85,9 @@ Subforum objects can be queried using the following methods: (examples on how to
 -  get_all_postids(self) <br />
         Takes no input and returns a list of ALL post ids. <br />
     <br />
+-  get_true_label(self, postid1, postid2) <br />
+	Takes two postids as input and returns the true label, which is one of "dup", "nodup" or "related". <br />
+    <br />
 
 #### PARTICULAR POST/QUESTION METHODS ####
 
@@ -264,6 +267,9 @@ Subforum objects can be queried using the following methods: (examples on how to
         remove_punct: punctuation is removed, except for punctuation in URLs and numbers. (Values: True or False) <br />
         stem: stemming is performed via the Porter stemmer as implemented in the NLTK (http://www.nltk.org/). (Values: True or False) <br />
     <br />
+-  url_cleaning(self, s) <br />
+	Takes a string as input and removes references to possible duplicate posts, and other stackexchange urls.
+   <br />
 
 #### EVALUATION METHODS FOR RETRIEVAL ####
 
@@ -307,7 +313,12 @@ Subforum objects can be queried using the following methods: (examples on how to
         Takes a file with scores as input and returns a dictionary with the Precision, Recall, F1-score, Accuracy and Precision and Recall per class. <br />
         The file with scores should have the same format as the classification training and test sets: <br />
         One line per classification with two space separated postids followed by a 1 for duplicates, or 0 for non-duplicates. <br />
-   
+   <br />
+-  plot_roc(self, scorefile, plotfilename) <br />
+	Takes a file with scores and a the name of a plot file (png) as input and returns the false positive rates (list), true positive rates (list), thresholds at which they were computed (list) and the area under the curve (float). The plot will be written to the supplied plot file. 
+        The scores can either be probability estimates of the positive class, confidence values, or binary decisions. 
+        This method requires scikit-learn to be installed: http://scikit-learn.org/stable/install.html 
+        This method only computes the ROC curve for the positive class. See http://scikit-learn.org/stable/auto_examples/model_selection/plot_roc.html for an example on how to make curves for multiple classes (for instance when you have a third class for the related questions).   <br />
 
 
     -----------------------------
