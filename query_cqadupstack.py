@@ -18,6 +18,7 @@ import os, re, sys
 import nltk, json, codecs
 import pydoc, math
 import zipfile, random, datetime
+import itertools
 from operator import truediv
 from scipy.misc import comb
 from random import randrange
@@ -408,7 +409,7 @@ class Subforum():
 	else:
 	    self.__stopwords = self.__middle_stopwords # DEFAULT
 
-    def perform_cleaning(self, s, remove_stopwords=False, remove_punct=False, stem=False):
+    def perform_cleaning(self, s, maxcodelength=150, remove_stopwords=False, remove_punct=False, stem=False):
 	''' Takes a string as input and returns a cleaned version.
 	    - The string will be lowercased and newlines removed.
 	    - HTML tags will be removed.
@@ -420,33 +421,74 @@ class Subforum():
 	    - Other HTML entities will be removed, and string matching the following pattern too: '&#?[a-z]+;'.
 	    - Whitespace is added around punctuation
 	    OPTIONAL ARGUMENTS:
+	    maxcodelength: the maximum length of code blocks that will not be removed. Default: 150.
 	    remove_stopwords: removed stop words. (Values: True or False)
 	    remove_punct: punctuation is removed, except for punctuation in URLs and numbers. (Values: True or False)
 	    stem: stemming is performed via the Porter stemmer as implemented in the NLTK (http://www.nltk.org/). (Values: True or False)
 	'''
+	s, codes = self._deal_with_code(s,maxcodelength)
         s = s.lower()
         s = re.sub('\n', ' ', s)
         s = self._remove_tags(s)
         s = self._expand_contractions(s)
-        s = self._general_cleaning(s,remove_punct)
+        s = self._general_cleaning(s,codes,remove_punct)
         if remove_stopwords:
             s = self._remove_stopwords(s)
         if stem:
             s = self._stem(s)
+	s = self._fix_exceptions(s)
 
 	# TODO: consider removing dashes between hyphenated words (far-off -> faroff), and removing full stops in acronyms/initials (U.N. -> UN). It helps for METEOR apparently (http://www.cs.cmu.edu/~alavie/METEOR/pdf/meteor-wmt11.pdf). U.S.-based will become US based.
 
 	return s
 
 
+    def _fix_exceptions(self, s):
+	''' Takes a string as input, applies a bunch of regexes to it to fix exceptions that have accidentally been changed, and returns the new string. '''
+	s = re.sub(' \. net ', ' .net', s)
+	s = re.sub(' i \. e ', ' i.e. ', s)
+	# fix extensions
+	s = re.sub(' \. jpeg ', '.jpeg ', s)
+	s = re.sub(' \. jpg ', '.jpg ', s)
+	return s
+
+    def _deal_with_code(self, s, maxcodelength):
+	''' Takes a string as input, finds all code blocks in it and replace them with HHHH to protect them from whitespace addition, lower casing etc. Then returns the new string and a list of the code blocks so we can replace them after more cleaning. '''
+        codepat = re.compile(r'<code>[^<]+</code>')
+        codes = re.findall(codepat, s) # re.M for multiline matching not necessary?
+        n = 0
+        newcodes = []
+        for c in codes:
+	    if len(c) < maxcodelength + 13: # two code tags are 13 characters
+		s = re.sub(re.escape(c), 'HHHH' + str(n), s)
+               
+		# Remove brackets if other half is missing. Else we'll have problems when we try to put them back. 
+		if re.search(r'\)', c) and not re.search(r'\(', c):
+                    c = re.sub(r'\)', '', c)
+                if re.search(r'\(', c) and not re.search(r'\)', c):
+                    c = re.sub(r'\(', '', c)
+
+		c = re.sub(r'\n', ' ', c, re.M) # remove real newlines
+		c = re.sub(r'\\n', r'\\\\n', c) # keep and escape \n in things like latex's \newcommand{}.
+		c = re.sub(r'\s+', ' ', c)
+		c = re.sub(r'<code>', '', c)
+		c = re.sub(r'</code>', '', c)
+                newcodes.append(c)
+                n += 1
+	    else:
+		s = re.sub(re.escape(c), '', s) # Remove large code blocks
+
+	return s, newcodes
+ 
+
     def url_cleaning(self, s):
         ''' Takes a string as input and removes references to possible duplicate posts, and other stackexchange urls. '''
 
-        posduppat = re.compile('<blockquote>(.|\n)+Possible Duplicate(.|\n)+</blockquote>', re.MULTILINE)
+        posduppat = re.compile(r'<blockquote>(.|\n)+?Possible Duplicate(.|\n)+?</blockquote>', re.MULTILINE)
         s = re.sub(posduppat, '', s)
 
-        s = re.sub('<a[^>]+stackexchange[^>]+>([^<]+)</a>', 'stackexchange-url ("\1")', s)
-        s = re.sub('<a[^>]+stackoverflow[^>]+>([^<]+)</a>', 'stackexchange-url ("\1")', s)
+        s = re.sub(r'<a[^>]+stackexchange[^>]+>([^<]+)</a>', 'stackexchange-url ("\1")', s)
+        s = re.sub(r'<a[^>]+stackoverflow[^>]+>([^<]+)</a>', 'stackexchange-url ("\1")', s)
 
         return s
 
@@ -536,30 +578,34 @@ class Subforum():
     def _fix_abbreviations(self, s):
 	''' Takes as input a string tokenized by nltk and joined again, and outputs a version in which the abbreviations have been fixed.
 	    That means the final dot has been glued to the abbreviation once more.'''
-	if re.search(' ([a-z]\.[a-z])+ \.', s):
-            found = re.search('( ([a-z]\.[a-z])+ \.)', s)
+	if re.search(r' ([a-z]\.[a-z])+ \.', s):
+            found = re.search(r'( ([a-z]\.[a-z])+ \.)', s)
             abbr = found.group(1)
             newabbr = re.sub(' ', '', abbr)
             s = re.sub(abbr, ' ' + newabbr, s)
 	return s
 
     def _remove_tags(self, s):
-	''' Takes a string as input and removes HTML tags.
-	    Also removes mentions of possible duplicates and changes URLs that point to other StackExchange threads into 'stackexahcnge-url'.
-	    And removes blocks of code. '''
+	''' Takes a string as input and removes HTML tags, except for code tags, which are remove in general_cleaning.
+	    Also removes mentions of possible duplicates and changes URLs that point to other StackExchange threads into 'stackexahcnge-url'. '''
 
-	s = re.sub("<blockquote.+possible duplicate.+/blockquote>", " ", s)
-	s = re.sub("<a href=\"https?://[a-z]+\.stackexchange\.com[^\"]+\">([^<]+)</a>", r"\1", s)
-	s = re.sub("<a href=\"[^\"]+\">([^<]+)</a>", r"\1", s)
+	s = re.sub(r"<blockquote.+possible duplicate.+/blockquote>", " ", s)
+	s = re.sub(r"<a href=\"https?://[a-z]+\.stackexchange\.com[^\"]+\">([^<]+)</a>", r"\1", s)
+	s = re.sub(r"<a href=\"[^\"]+\">([^<]+)</a>", r"\1", s)
 
 	# Put some space between tags and urls or other things. So we don't accidentally remove more than we should a few lines further below this line.
-	s = re.sub("<", " <", s)
-	s = re.sub(">", "> ", s)
+	s = re.sub(r"<", " <", s)
+	s = re.sub(r">", "> ", s)
 
-	s = re.sub("https?://([a-z]+\.)?stackexchange\.com[^ ]+", "stackexchange-url", s)
-	s = re.sub("https?://stackoverflow\.com[^ ]+", "stackexchange-url", s)
-	s = re.sub("<code>[^<]+</code>", "", s)
-	s = re.sub('</?[^>]+>', ' ', s)
+	s = re.sub(r"https?://([a-z]+\.)?stackexchange\.com[^ ]+", "stackexchange-url", s)
+	s = re.sub(r"https?://stackoverflow\.com[^ ]+", "stackexchange-url", s)
+
+	# Remove all tags except for code tags
+	alltags = re.findall(r'(</?)([^>]+)(>)', s) # list of tuples
+	for tag in alltags:
+	    if tag[1] != u'code':
+                codetag = tag[0] + tag[1] + tag[2]
+		s = re.sub(re.escape(codetag), '', s)
 	return s
 
 
@@ -581,19 +627,13 @@ class Subforum():
 	    'weren\'t': ' were not',
 	    'i\'ve': 'i have',
 	    'you\'ve': 'you have',
-	    'he\'s': 'he has',
-	    'she\'s': 'she has',
-	    'it\'s': 'it has',
 	    'we\'ve': 'we have',
 	    'they\'ve': 'they have',
-	    'there\'s': 'there has',
 	    'hasn\'t': 'has not',
 	    'haven\'t': 'have not',
-	    'i\'d': 'i had',
 	    'you\'d': 'you had',
 	    'he\'d': 'he had',
 	    'she\'d': 'she had',
-	    'it\'d': 'it had',
 	    'we\'d': 'we had',
 	    'they\'d': 'they had',
 	    'doesn\'t': 'does not',
@@ -607,12 +647,7 @@ class Subforum():
 	    'they\'ll': 'they will',
 	    'there\'ll': 'there will',
 	    'i\'d': 'i would',
-	    'you\'d': 'you would',
-	    'he\'d': 'he would',
-	    'she\'d': 'she would',
 	    'it\'d': 'it would',
-	    'we\'d': 'we would',
-	    'they\'d': 'they would',
 	    'there\'d': 'there had',
 	    'there\'d': 'there would',
 	    'can\'t': 'can not',
@@ -629,16 +664,17 @@ class Subforum():
 	    'won\'t': 'will not',
 	    'wouldn\'t': 'would not',
 	    'what\'s': 'what is',
-	    'it\'s': 'it is',
 	    'that\'s': 'that is',
 	    'who\'s': 'who is',}
 	# Some forms of 's could either mean 'is' or 'has' but we've made a choice here.
+	# Some forms of 'd could either mean 'had' or 'would' but we've made a choice here.
+	# Some forms of 'll could wither mean 'will' or 'shall' but we've made a choice here.
 	for pat in c:
 	    s = re.sub(pat, c[pat], s)
 	return s
 
 
-    def _general_cleaning(self, s, remove_punct=False):
+    def _general_cleaning(self, s, codes, remove_punct=False):
 	''' Takes a string as input and False or True for the argument 'remove_punct'.
 	    Depending on the value of 'remove_punct', all punctuation is either removed, or a space is added before and after.
 	    In both cases the punctuation un URLs and numbers is retained. 
@@ -657,8 +693,8 @@ class Subforum():
 	n = 0
 	newurls = []
 	for url in set(urls):
-	    if re.search('\)', url) and not re.search('\(', url):
-		url = re.sub('\).*$', '', url)
+	    if re.search(r'\)', url) and not re.search('\(', url):
+		url = re.sub(r'\).*$', '', url)
 	    if re.search(r'\\', url): # Get rid of backslashes because else we get regex problems when trying to put the URLs back.
 		url = re.sub(r'\\', '/', url)
 	    s = re.sub(re.escape(url), 'GGGG' + str(n), s)
@@ -666,86 +702,99 @@ class Subforum():
 	    n += 1
 
 	# Protect points, commas and colon in numbers
-	while re.search('([0-9])\.([0-9])', s):
-	    s = re.sub('([0-9])\.([0-9])', r'\1BBB\2', s)
-	while re.search('([0-9]),([0-9])', s):
-            s = re.sub('([0-9]),([0-9])', r'\1CCC\2', s)
-	while re.search('([0-9]):([0-9])', s):
-            s = re.sub('([0-9]):([0-9])', r'\1DDD\2', s)
+	while re.search(r'([0-9])\.([0-9])', s):
+	    s = re.sub(r'([0-9])\.([0-9])', r'\1BBB\2', s)
+	while re.search(r'([0-9]),([0-9])', s):
+            s = re.sub(r'([0-9]),([0-9])', r'\1CCC\2', s)
+	while re.search(r'([0-9]):([0-9])', s):
+            s = re.sub(r'([0-9]):([0-9])', r'\1DDD\2', s)
 
-	s = re.sub('&amp;', ' and ', s)
+	s = re.sub(r'&amp;', ' and ', s)
 
 	if remove_punct:
 	    # Remove all sorts of punctuation
 	    #s = re.sub('[^a-zA-Z0-9_-]', ' ', s) # Too agressive!
-            if re.search(' ([a-z]\.)+', s): # protect abbreviations
-                found = re.search('( ([a-z]\.)+)', s)
-                abbr = found.group(1)
-		newabbr = re.sub(' ', '', abbr)
-                newabbr = re.sub('\.', 'PPPP', abbr)
-		abbr_nop = re.sub('PPPP', '.', newabbr)
-                s = re.sub(abbr, newabbr, s)
-		s = re.sub('\.', '', s)
-		s = re.sub(newabbr, abbr_nop, s)
+	    p = re.compile(r'( [a-z] \.)( [a-z] \.)+')
+	    l = p.finditer(s)
+	    if l:
+                for m in l:
+                    newbit = re.sub(r' ', '', m.group()) # Get rid of white space in abbreviations
+		    newabbr = re.sub(r'\.', 'PPPP', newbit) # change dots in abbreviations into 'PPPP'
+                    s = re.sub(m.group() + ' +', ' ' + newabbr + ' ', s) # protect abbreviations
+		    s = re.sub(r'\.', '', s) # remove all points that are not in abbreviations
+		    s = re.sub(newabbr, newbit, s) # place dots back in abbreviations
 	    else:
-		s = re.sub('\.', ' ', s)
-            s = re.sub(',', ' ', s)
-            s = re.sub('\?', ' ', s)
-            s = re.sub('!', ' ', s)
-            s = re.sub(' \'([a-z])', r'  \1', s)
-            s = re.sub('([a-z])\' ', r'\1 ', s)
-            s = re.sub(' \"([a-z])', r' \1', s)
-            s = re.sub('([a-z])\" ', r'\1 ', s)
-            s = re.sub('\(', ' ', s)
-            s = re.sub('\)', ' ', s)
-            s = re.sub('\[', ' ', s)
-            s = re.sub('\]', ' ', s)
-            s = re.sub('([a-z]): ', r'\1 ', s)
-            s = re.sub(';', ' ', s)
-	    s = re.sub(" - ", " ", s)
-            s = re.sub("- ", " ", s)
+		s = re.sub(r'\.', ' ', s)
+            s = re.sub(r',', ' ', s)
+            s = re.sub(r'\?', ' ', s)
+            s = re.sub(r'!', ' ', s)
+            s = re.sub(r' \'([a-z])', r'  \1', s)
+            s = re.sub(r'([a-z])\' ', r'\1 ', s)
+            s = re.sub(r' \"([a-z])', r' \1', s)
+            s = re.sub(r'([a-z])\" ', r'\1 ', s)
+            s = re.sub(r'\(', ' ', s)
+            s = re.sub(r'\)', ' ', s)
+            s = re.sub(r'\[', ' ', s)
+            s = re.sub(r'\]', ' ', s)
+            s = re.sub(r'([a-z]): ', r'\1 ', s)
+            s = re.sub(r';', ' ', s)
+	    s = re.sub(r" - ", " ", s)
+            s = re.sub(r"- ", " ", s)
 	else:
 	    # Add space around all sorts of punctuation.
 	    #s = re.sub('([^a-zA-Z0-9_-])', r' \1 ', s) # Too agressive!
-	    s = re.sub('\.', ' . ', s)
-	    if re.search('( [a-z] \.)+', s): # fix abbreviations
-		found = re.search('(( [a-z] \.)+)', s)
-		abbr = found.group(1)
-		newabbr = re.sub(' ', '', abbr)
-		s = re.sub(abbr, ' ' + newabbr, s)
-	    s = re.sub(',', ' , ', s)
-	    s = re.sub('\?', ' ? ', s)
-	    s = re.sub('!', ' ! ', s)
-	    s = re.sub(' \'([a-z])', r" ' \1", s)
-	    s = re.sub('([a-z])\' ', r"\1 ' ", s)
-	    s = re.sub(' \"([a-z])', r' " \1', s)
-            s = re.sub('([a-z])\" ', r'\1 " ', s)
-	    s = re.sub('\(', ' ( ', s)
-	    s = re.sub('\)', ' ) ', s)
-	    s = re.sub('\[', ' [ ', s)
-            s = re.sub('\]', ' ] ', s)
-	    s = re.sub('([a-z]): ', r'\1 : ', s)
-	    s = re.sub(';', ' ; ', s)
+	    s = re.sub(r'\.', ' . ', s)
+
+	    # Remove space around abbreviations
+	    p = re.compile(r'( [a-z] \.)( [a-z] \.)+')
+	    for m in p.finditer(s):
+    		#print m.start(), '###' + m.group() + '###'
+		#print s[m.start() - 20: m.start() + 20]
+		newbit = re.sub(' ', '', m.group())
+		s = re.sub(m.group() + ' +', ' ' + newbit + ' ', s)
+		#print s[m.start() - 20: m.start() + 20]
+
+	    s = re.sub(r',', ' , ', s)
+	    s = re.sub(r'\?', ' ? ', s)
+	    s = re.sub(r'!', ' ! ', s)
+	    s = re.sub(r' \'([a-z])', r" ' \1", s)
+	    s = re.sub(r'([a-z])\' ', r"\1 ' ", s)
+	    s = re.sub(r' \"([a-z])', r' " \1', s)
+            s = re.sub(r'([a-z])\" ', r'\1 " ', s)
+	    s = re.sub(r'\(', ' ( ', s)
+	    s = re.sub(r'\)', ' ) ', s)
+	    s = re.sub(r'\[', ' [ ', s)
+            s = re.sub(r'\]', ' ] ', s)
+	    s = re.sub(r'([a-z]): ', r'\1 : ', s)
+	    s = re.sub(r';', ' ; ', s)
+	    s = re.sub(r"'s", " 's", s)
+
 
 	# Restore points, commas and colons in numbers
-	while re.search('([0-9])BBB([0-9])', s):
-	    s = re.sub('([0-9])BBB([0-9])', r'\1.\2', s)
-        while re.search('([0-9])CCC([0-9])', s):
-            s = re.sub('([0-9])CCC([0-9])', r'\1,\2', s)
-        while re.search('([0-9])DDD([0-9])', s):
-            s = re.sub('([0-9])DDD([0-9])', r'\1:\2', s)
+	while re.search(r'([0-9])BBB([0-9])', s):
+	    s = re.sub(r'([0-9])BBB([0-9])', r'\1.\2', s)
+        while re.search(r'([0-9])CCC([0-9])', s):
+            s = re.sub(r'([0-9])CCC([0-9])', r'\1,\2', s)
+        while re.search(r'([0-9])DDD([0-9])', s):
+            s = re.sub(r'([0-9])DDD([0-9])', r'\1:\2', s)
 
 	# restore URLs
-	for i, u in enumerate(newurls):
+	newurllist = itertools.izip(reversed(xrange(len(newurls))), reversed(newurls)) # reverse list to GGGG1 does not match GGG10. (Source: http://galvanist.com/post/53478841501/python-reverse-enumerate)
+	for i, u in newurllist:
 	    s = re.sub('GGGG' + str(i), u, s) # Escaping u here leads to backslashes in URLs.
 
 	# Get rid of things we don't want, like HTML entities.
-	s = re.sub("&[a-z]+;", "", s)
-	s = re.sub("&#?[a-z]+;", "", s) # &#xA; == '\n'
+	s = re.sub(r"&[a-z]+;", "", s)
+	s = re.sub(r"&#?[a-z]+;", "", s) # &#xA; == '\n'
 	# Remove excessive whitespace
-	s = re.sub("\s+", " ", s)
-	s = re.sub("^\s", "", s)
-	s = re.sub("\s$", "", s)
+	s = re.sub(r"\s+", " ", s)
+	s = re.sub(r"^\s", "", s)
+	s = re.sub(r"\s$", "", s)
+
+        # restore codeblocks
+	newlist = itertools.izip(reversed(xrange(len(codes))), reversed(codes)) # reverse list to hhhh1 does not match hhhh10 (Source: http://galvanist.com/post/53478841501/python-reverse-enumerate)
+	for i, c in newlist:
+            s = re.sub('hhhh' + str(i), c.encode('unicode-escape'), s) # Escaping here leads to backslashes being added in the code blocks.
 	return s
 
 
