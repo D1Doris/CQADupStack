@@ -498,7 +498,7 @@ class Subforum():
 
         return s
 
-    def strip_tags(self, html):
+    def strip_tags(self, html): # Source: http://stackoverflow.com/questions/753052/strip-html-from-strings-in-python
         s = MLStripper()
         s.feed(html)
         return s.get_data()
