@@ -192,11 +192,11 @@ class Subforum():
 	cdate = datetime.datetime.strptime(self.postdict[postid]['creationdate'], "%Y-%m-%dT%H:%M:%S.%f")
         return cdate.strftime('%H') + ':' + cdate.strftime('%M') + ':' + cdate.strftime('%S')
 
-    def get_viewcount(self, postid):
+    def get_postviewcount(self, postid):
 	''' Takes a post id as input and returns the number of times the post has been looked at by users. '''
 	return self.postdict[postid]["viewcount"]
 
-    def get_favoritecount(self, postid):
+    def get_postfavoritecount(self, postid):
 	''' Takes a post id as input and returns an integer representing the nr of times this post has been favoured by a user.
 	    More information on what that means can be found here: http://meta.stackexchange.com/questions/53585/how-do-favorite-questions-work '''
 	return self.postdict[postid]['favoritecount']
@@ -217,7 +217,7 @@ class Subforum():
 	''' Takes a post id as input and returns a list of ids of posts that have been labeled as related to it. '''
 	return self.postdict[postid]['related']
 
-    def get_tags(self, postid):
+    def get_posttags(self, postid):
         ''' Takes a post id as input and returns a list of tags. '''
         return self.postdict[postid]['tags']
 
@@ -485,6 +485,7 @@ class Subforum():
     def very_basic_cleaning(self, s):
         s = self.url_cleaning(s)
         s = self.strip_tags(s)
+        s = re.sub('\n+', ' ', s)
         return s
 
     def url_cleaning(self, s):
@@ -1473,7 +1474,7 @@ def usage():
     ... 
     18985 1
     18980 0
-    >>> o.get_tags(o.get_random_postid())
+    >>> o.get_posttags(o.get_random_postid())
     [u'wordpress', u'redirects', u'blog', u'plugin']
     >>> o.get_postuserid('18957')
     u'1907'
