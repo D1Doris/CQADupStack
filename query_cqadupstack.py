@@ -22,6 +22,7 @@ import itertools
 from operator import truediv
 from scipy.misc import comb
 from random import randrange
+from HTMLParser import HTMLParser
 
 # Written by Doris Hoogeveen Nov 2015. For a usage please call the script without arguments.
 
@@ -479,7 +480,12 @@ class Subforum():
 		s = re.sub(re.escape(c), '', s) # Remove large code blocks
 
 	return s, newcodes
- 
+
+
+    def very_basic_cleaning(self, s):
+        s = self.url_cleaning(s)
+        s = self.strip_tags(s)
+        return s
 
     def url_cleaning(self, s):
         ''' Takes a string as input and removes references to possible duplicate posts, and other stackexchange urls. '''
@@ -492,6 +498,10 @@ class Subforum():
 
         return s
 
+    def strip_tags(self, html):
+        s = MLStripper()
+        s.feed(html)
+        return s.get_data()
 
     def _remove_stopwords(self, s):
 	''' Takes a string as input, removes the stop words in the current stop word list, and returns the result.
@@ -1401,6 +1411,15 @@ class Subforum():
 
         return recall_for_positives, recall_for_negatives
 
+
+class MLStripper(HTMLParser):
+    def __init__(self):
+        self.reset()
+        self.fed = []
+    def handle_data(self, d):
+        self.fed.append(d)
+    def get_data(self):
+        return ''.join(self.fed)
 
 
 
