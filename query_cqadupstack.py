@@ -1,4 +1,5 @@
 #!/usr/bin/env python
+# -*- coding: utf-8 -*-
 
 # Copyright 2015 Doris Hoogeveen (doris dot hoogeveen at gmail)
 
@@ -752,6 +753,10 @@ class Subforum():
             s = re.sub(r';', ' ', s)
 	    s = re.sub(r" - ", " ", s)
             s = re.sub(r"- ", " ", s)
+            s = re.sub("`", "", s)
+            s = re.sub('“', '', s)
+            s = re.sub('”', '', s)
+            s = re.sub('"', '', s)
 	else:
 	    # Add space around all sorts of punctuation.
 	    #s = re.sub('([^a-zA-Z0-9_-])', r' \1 ', s) # Too agressive!
