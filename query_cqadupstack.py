@@ -558,6 +558,7 @@ class Subforum():
         counter = 0
 
 	newwords = []
+        prevw_in_split = True
 	for w in words:
 	    # It used to be so beautiful and simple, until I found out that NLTK splits some things wrongly...
 	    #neww = nltk.PorterStemmer().stem_word(w)
