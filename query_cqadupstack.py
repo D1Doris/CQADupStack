@@ -111,9 +111,17 @@ class Subforum():
                 nodups.append(p)
         return nodups
 
+    def get_posts_with_related(self):
+        ''' Takes no input and returns a list of all posts that have related questions. '''
+        related = []
+        for p in self.postdict:
+            if len(self.postdict[p]['related']) > 0:
+                related.append(p)
+        return related
+
     def get_posts_with_and_without_duplicates(self):
         ''' Takes no input and returns two lists: one with all posts that have at least one duplicate, and one with all posts that don't have any duplicates. In that order.
-            Calling this method is quicker than calling get_posts_with_duplicates() followed by get_posts_without_duplicates() is you want both dups and non-dups. '''
+            Calling this method is quicker than calling get_posts_with_duplicates() followed by get_posts_without_duplicates() if you want both dups and non-dups. '''
         nodups = []
         dups = []
         for p in self.postdict:
@@ -122,6 +130,22 @@ class Subforum():
             else:
                 dups.append(p)
         return dups, nodups
+
+    def get_posts_dups_nodups_and_related(self):
+        ''' Takes no input and return three lists: one with all posts that have at least one duplicate, one with all posts that have at least one related question, and one with all posts that don't have any duplicates or related questions. In that order.
+            Calling this method is quicker than calling get_posts_with_duplicates(), followed by get_posts_with_related(), followed by get_posts_without_duplicates() if you want all three types of questions.
+            There may be overlap in the list of posts with duplicates and posts with related questions, because posts can have bot duplicates and related questions. '''
+        nodups = []
+        dups = []
+        related = []
+        for p in self.postdict:
+            if len(self.postdict[p]['dups']) == 0 and len(self.postdict[p]['related']) == 0:
+                nodups.append(p)
+            if len(self.postdict[p]['related']) > 0:
+                related.append(p)
+            if len(self.postdict[p]['dups']) > 0:
+                dups.append(p)
+        return dups, related, nodups
 
     def get_ordered_list_of_posts(self):
         ''' Takes no input and returns a list of tuples (postid, datetime object), ordered chronologically from newest to oldest post. '''
@@ -321,6 +345,10 @@ class Subforum():
     ################
     # USER METHODS #
     ################
+
+    def get_all_users(self):
+        ''' Takes no input and returns a list of all users. '''
+        return self.userdict.keys()
 
     def get_user_reputation(self, userid):
 	''' Takes a user id as input and outputs an integer representing the reputation of the user.
