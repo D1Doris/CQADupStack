@@ -3,8 +3,6 @@ The scripts in this directory can be used to manipulate the CQADupStack data, do
 CQADupStack contains 12 Stackexchange (http://stackexchange.com/) subforums which have been preprocessed as described in the paper mentioned below.
 The StackExchange data dump that forms the basis of this set is the version released on September 26, 2014.
 
-stackexchange_xmldump_to_cqadupstack.py was used to change the StackExchange dump into CQADupStack.
-
 query_cqadupstack.py enables easy access to all the different fields in CQADupStack. It can be used to split the data into pre-defined retrieval or classification splits, and it can be used to evaluate the output of your system, using one of several evaluation metrics available.
 
 Please cite the following paper when making use of CQADupStack:
