@@ -103,6 +103,14 @@ class Subforum():
                 dups.append(p)
         return dups
 
+    def get_all_duplicate_pairs(self):
+        ''' Takes no input an returns a list of duplicate question pairs as tuples of ids. '''
+        duppairs = []
+        for p in self.postdict:
+            for d in self.postdict[p]['dups']:
+                duppairs.append((p, d))
+        return duppairs
+
     def get_posts_without_duplicates(self):
         ''' Takes no input and returns a list of all posts that don't have any duplicates. '''
         nodups = []
@@ -118,6 +126,14 @@ class Subforum():
             if len(self.postdict[p]['related']) > 0:
                 related.append(p)
         return related
+
+    def get_all_related_pairs(self):
+        ''' Takes no input an returns a list of related question pairs as tuples of ids. '''
+        relpairs = []
+        for p in self.postdict:
+            for d in self.postdict[p]['related']:
+                relpairs.append((p, d))
+        return relpairs
 
     def get_posts_with_and_without_duplicates(self):
         ''' Takes no input and returns two lists: one with all posts that have at least one duplicate, and one with all posts that don't have any duplicates. In that order.
@@ -146,6 +162,12 @@ class Subforum():
             if len(self.postdict[p]['dups']) > 0:
                 dups.append(p)
         return dups, related, nodups
+
+    def get_older_posts(self, postid):
+        ''' Takes a post id as input and returns a list of question ids that are older than the input post id. '''
+        allordered = [i[0] for i in self.get_ordered_list_of_posts()]
+        postindex = allordered.index(postid)
+        return allordered[postindex:]
 
     def get_ordered_list_of_posts(self):
         ''' Takes no input and returns a list of tuples (postid, datetime object), ordered chronologically from newest to oldest post. '''
@@ -183,7 +205,7 @@ class Subforum():
 	elif postid1 in self.postdict[postid2]['related']:
 	    return "related"
 	elif postid2 in self.postdict[postid1]['dups']:
-	    return "dups"
+	    return "dup"
 	elif postid2 in self.postdict[postid1]['related']:
             return "related"
 	else:
@@ -236,7 +258,7 @@ class Subforum():
 
     def get_duplicates(self, postid):
 	''' Takes a post id as input and returns a list of ids of posts that have been labeled as a duplicate of it. '''
-	return self.postdict[postid]['dups']
+	return self.postdict[postid]['dups']#.keys()
 
     def get_related(self, postid):
 	''' Takes a post id as input and returns a list of ids of posts that have been labeled as related to it. '''
@@ -246,6 +268,44 @@ class Subforum():
         ''' Takes a post id as input and returns a list of tags. '''
         return self.postdict[postid]['tags']
 
+    def get_duptagdates(self, postid1, postid2):
+        ''' Takes two post ids as input and returns a list of dates on which this pair received a duplicate tag, in %Y-%m-%dT%H:%M:%S.%f format.
+            Usually the list only contains one date, but sometimes it contains multiple. '''
+        if postid1 in self.postdict[postid2]['dups']:
+            ddates_raw = self.postdict[postid2]['dups'][postid1]['votedates']
+            
+        else:
+            ddates_raw = self.postdict[postid1]['dups'][postid2]['votedates']
+        ddates = []
+        for ddate in ddates_raw:
+            #datet = datetime.datetime.strptime(ddate, "%Y-%m-%dT%H:%M:%S.%f")
+            #dates.append(str(datet.year) + '-' + datet.strftime('%m') + '-' + datet.strftime('%d'))
+            ddates.append(ddate)
+        return ddates
+
+    def get_first_duptagdate(self, postid):
+        ''' Takes one postid as input and returns the date on which this post was tagged as a duplicate for the first time, in %Y-%m-%dT%H:%M:%S.%f format,
+            or 0 if the post has not been tagged as a duplicate (yet). '''
+        dups = self.get_duplicates(postid)
+        dupdates = []
+        for dup in dups:
+            checkdates = self.postdict[postid]['dups'][dup]['votedates']
+            for c in checkdates:
+                cdate = datetime.datetime.strptime(c, "%Y-%m-%dT%H:%M:%S.%f")
+                dupdates.append(c)
+        dupdates.sort()
+        #print dupdates
+        if len(dupdates) > 0:
+            return dupdates[0]
+        else:
+            0
+
+    def get_dupvoters(self, postid1, postid2):
+        ''' Takes two post ids as input and returns a list of the users that have voted for these two questions to be duplicates. '''
+        if postid1 in self.postdict[postid2]['dups']:
+            return self.postdict[postid2]['dups'][postid1]['voters']
+        else:
+            return self.postdict[postid1]['dups'][postid2]['voters']
 
     ##################
     # ANSWER METHODS #
@@ -265,10 +325,20 @@ class Subforum():
 
     def get_acceptedanswer(self, postid):
         ''' Takes a post id as input and returns the answer id of the accepted answer if it exists, else it returns False. '''
+        if postid not in self.postdict:
+            raise KeyError(postid + " is not a valid post id for this subforum.")
         if 'acceptedanswer' in self.postdict[postid]:
             return self.postdict[postid]['acceptedanswer']
         else:
             return False
+
+    def get_acceptedanswer_date(self, answerid):
+        ''' Takes an answer id as input and returns the date at which it was selected as the best answer in YYYY-MM-DD format, if it exists. Else it returns 0. '''
+        if self.answerdict[answerid]['acceptedanswerdate'] == 0:
+            return 0
+        else:
+            adate = datetime.datetime.strptime(self.answerdict[answerid]['acceptedanswerdate'], "%Y-%m-%dT%H:%M:%S.%f")
+            return str(adate.year) + '-' + adate.strftime('%m') + '-' + adate.strftime('%d')
 
     def get_answerbody(self, answerid):
 	''' Takes an answer id as input and returns the body of the answer. That is the text of the answer. '''
@@ -514,6 +584,7 @@ class Subforum():
     def very_basic_cleaning(self, s):
         s = self.url_cleaning(s)
         s = self.strip_tags(s)
+        s = ' '.join(s.split()) # remove multiple whitespaces
         s = re.sub('\n+', ' ', s)
         return s
 
@@ -523,8 +594,8 @@ class Subforum():
         posduppat = re.compile(r'<blockquote>(.|\n)+?Possible Duplicate(.|\n)+?</blockquote>', re.MULTILINE)
         s = re.sub(posduppat, '', s)
 
-        s = re.sub(r'<a[^>]+stackexchange[^>]+>([^<]+)</a>', 'stackexchange-url ("\1")', s)
-        s = re.sub(r'<a[^>]+stackoverflow[^>]+>([^<]+)</a>', 'stackexchange-url ("\1")', s)
+        s = re.sub(r'<a[^>]+stackexchange[^>]+>([^<]+)</a>', r'stackexchange-url ("\1")', s)
+        s = re.sub(r'<a[^>]+stackoverflow[^>]+>([^<]+)</a>', r'stackexchange-url ("\1")', s)
 
         return s
 
@@ -847,10 +918,10 @@ class Subforum():
     # Split methods #
     #################
 
-    def split_for_classification(self):
-	''' Takes no input and makes twelve plain text files: a small test set, a large test set, and 10 files for the training set (trainpairs_[01-10].txt, testpairs_small.txt and testpairs_large.txt).
+    def split_for_classification(self, outputdir='.'):
+	''' Takes a directory as input and writes twelve plain text files to this directory: a small test set, a large test set, and 10 files for the training set (trainpairs_[01-10].txt, testpairs_small.txt and testpairs_large.txt).
 	    Each line in these sets contains two postids and a label (1 for duplicate, 0 for non-duplicate), separated by a space. Each of these pairs is a training or test instance.
-	    The training pairs have been divided over ten different files. These can be used for ten-fold cross-validation.
+	    The training pairs have been divided over ten different files, each with a similar class distribution. These can be used for ten-fold cross-validation.
 
 	    To make the split all posts are ordered according to date. Next the set is cut into two at a certain date.
 	    This date is chosen such that the test set will ideally contain at least 200 duplicate pairs, or if that iss not possible, as many as possible, with a minimum of 100, and the train set contains at least four times as many.
@@ -883,7 +954,7 @@ class Subforum():
 	# Generate pairs and write them to files.
 	withdups = []
         withoutdups = []
-	testfile = open(self.cat + '_testpairs_large.txt', 'w')
+	testfile = open(outputdir + '/' + self.cat + '_testpairs_large.txt', 'w')
 	for i,postid in enumerate(testposts):
 	    dups = self.get_duplicates(postid)
 	    combine_with = testposts[i+1:] # combine each post with older posts.
@@ -912,7 +983,7 @@ class Subforum():
 	    withoutdups_for_smallset.append(picked_nondup)
 	    nrofnondups_forsmallset -= 1
 
-        testfile = open(self.cat + '_testpairs_small.txt', 'w')
+        testfile = open(outputdir + '/' + self.cat + '_testpairs_small.txt', 'w')
         for tup in withdups:
             testfile.write(tup[0] + ' ' + tup[1] + ' ' + tup[2] + '\n')
         for tup in withoutdups_for_smallset:
@@ -923,16 +994,16 @@ class Subforum():
 	totaltrainpairs = int(round(float(comb(len(trainposts), 2)),0))
 	print "total train pairs:", totaltrainpairs
 
-	trainfile1 = open(self.cat + '_trainpairs_01.txt', 'w')
-        trainfile2 = open(self.cat + '_trainpairs_02.txt', 'w')
-        trainfile3 = open(self.cat + '_trainpairs_03.txt', 'w')
-        trainfile4 = open(self.cat + '_trainpairs_04.txt', 'w')
-        trainfile5 = open(self.cat + '_trainpairs_05.txt', 'w')
-        trainfile6 = open(self.cat + '_trainpairs_06.txt', 'w')
-        trainfile7 = open(self.cat + '_trainpairs_07.txt', 'w')
-        trainfile8 = open(self.cat + '_trainpairs_08.txt', 'w')
-        trainfile9 = open(self.cat + '_trainpairs_09.txt', 'w')
-        trainfile10 = open(self.cat + '_trainpairs_10.txt', 'w')
+	trainfile1 = open(outputdir + '/' + self.cat + '_trainpairs_01.txt', 'w')
+        trainfile2 = open(outputdir + '/' + self.cat + '_trainpairs_02.txt', 'w')
+        trainfile3 = open(outputdir + '/' + self.cat + '_trainpairs_03.txt', 'w')
+        trainfile4 = open(outputdir + '/' + self.cat + '_trainpairs_04.txt', 'w')
+        trainfile5 = open(outputdir + '/' + self.cat + '_trainpairs_05.txt', 'w')
+        trainfile6 = open(outputdir + '/' + self.cat + '_trainpairs_06.txt', 'w')
+        trainfile7 = open(outputdir + '/' + self.cat + '_trainpairs_07.txt', 'w')
+        trainfile8 = open(outputdir + '/' + self.cat + '_trainpairs_08.txt', 'w')
+        trainfile9 = open(outputdir + '/' + self.cat + '_trainpairs_09.txt', 'w')
+        trainfile10 = open(outputdir + '/' + self.cat + '_trainpairs_10.txt', 'w')
 
 	filenrs = [trainfile1, trainfile2, trainfile3, trainfile4, trainfile5, trainfile6, trainfile7, trainfile8, trainfile9, trainfile10]
 	dupindex = 0
@@ -1217,7 +1288,7 @@ class Subforum():
 	return sum(recall_at_list) / len(recall_at_list)
 
     def average_precision_at(self, scorefile, cutoff=None, include_related_posts=False):
-	''' Takes a file with scores and optionally a cutoff point as input and returns the Precision (at this cutoff, if specified). 
+	''' Takes a file with scores and optionally a cutoff point as input and returns the Average Precision (at this cutoff, if specified). 
 	    If the optional argument 'include_related_posts' is set to True, then related posts are treated as half relevant.
 	    Only queries with relevant posts are taken into account. Queries with ONLY related posts are ignored, even with include_related_posts=True, to make the scores better comparable. '''
 	
@@ -1262,6 +1333,60 @@ class Subforum():
                 average_precisions.append(av_p)
         
         return sum(average_precisions) / len(average_precisions)
+
+
+    def truncated_mean_average_precision(self, scorefile, include_related_posts=False):
+        ''' Takes a file with scores as input and returns the Truncated Mean Average Precision (TMAP) as explained in Liu et al. 2016 (http://people.eng.unimelb.edu.au/tbaldwin/pubs/sigir2016.pdf). 
+            If the optional argument 'include_related_posts' is set to True, then related posts are treated as half relevant. The default value is False.
+            Only queries with relevant posts are taken into account. Queries with ONLY related posts are ignored, even with include_related_posts=True, to make the scores better comparable. '''
+
+        all_rankings, all_relevantdocs, all_relateddocs = self._read_scorefile(scorefile)
+        num_queries = len(all_rankings)
+        TAP = 0.0
+
+        for i,ranking in enumerate(all_rankings):
+            if 'NIL' not in ranking:
+                ranking.append('NIL')
+            relevantdocs = all_relevantdocs[i]
+            relateddocs = all_relateddocs[i]
+            if relevantdocs != []:# or (relateddocs != [] and include_related_posts): # We only compute the score for queries that actually do have duplicates in the indexed set.
+                                  # With the above extra check included, it can happen that the scores decrease when including related posts.
+                                  # This is because some queries only have related posts, leading to a higher number of scores in precision_at_list.
+
+                # compute the number of relevant docs
+                if include_related_posts == True:
+                    R = len(relevantdocs) + 0.5 * len(relateddocs)
+                else:
+                    R = len(relevantdocs)
+                R_term = 1.0 / (R + 1)
+
+                avg_prec = 0
+                precisions = []
+                num_correct = 0
+                for i, v in enumerate(ranking):
+                    if v in relevantdocs:
+                        num_correct += 1
+                        p = float(num_correct) / (i+1)
+                        precisions.append(p)
+                    elif v in relateddocs and include_related_posts == True:
+                        num_correct += 0.5
+                        p = float(num_correct) / (i+1)
+                        precisions.append(p)
+                    elif v == 'NIL':
+                        if R == 0:
+                            rt = 1.0
+                            p = rt / (i + 1)
+                            precisions.append(p)
+                        else:
+                            rt = float(num_correct) / R
+                            p = rt * ((float(num_correct) + rt) / (i+1))
+                            precisions.append(p)
+                    else:
+                        pass #non relevant candidate. Do nothing, because won't add anything to sum.
+
+                TMAP += sum(precisions) * R_term
+
+        return TMAP / num_queries
 
 
     def _average_precision(self, ranking, relevantdocs, relateddocs=[]):
